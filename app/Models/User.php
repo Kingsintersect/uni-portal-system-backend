@@ -109,6 +109,13 @@ class User extends Authenticatable implements JWTSubject
     }
 
 
+    public function studentResults()
+    {
+        return $this->hasMany(StudentResult::class);
+    }
+
+
+
 
 
 
@@ -123,7 +130,7 @@ class User extends Authenticatable implements JWTSubject
         return [1 => 'DEGREE', 2 => 'PHD', 3 => 'PGD', 4 => 'MSC'];
     }
 
-    public static function checkAdminAuthority(): Bool
+    public static function checkAdminAuthority(): bool
     {
         $user = auth('api')->user();
         if ($user) {
