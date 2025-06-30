@@ -42,7 +42,8 @@ return [
         ],
         'api' => [
             'driver' => 'jwt',
-            'provider' => 'applications_api',
+            // 'provider' => 'applications_api',
+            'provider' => 'users',
             'hash' => false
         ],
         'admin' => [

@@ -1,21 +1,23 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\Free\FreeController;
-use App\Http\Controllers\Api\User\UserController;
 use App\Http\Controllers\Api\Admin\AdminController;
-use App\Http\Controllers\Api\User\EnrollmentController;
-use App\Http\Controllers\Api\Application\ApplicationController;
-use App\Http\Controllers\Api\Admin\FacultyController;
-use App\Http\Controllers\Api\Admin\DepartmentController;
+use App\Http\Controllers\Api\Admin\CourseAssignmentController;
+use App\Http\Controllers\Api\Admin\CourseCategoryController;
 use App\Http\Controllers\Api\Admin\CourseController;
+use App\Http\Controllers\Api\Admin\DepartmentController;
+use App\Http\Controllers\Api\Admin\FacultyController;
 use App\Http\Controllers\Api\Admin\LgaController;
 use App\Http\Controllers\Api\Admin\StateController;
-use App\Http\Controllers\Api\Admin\CourseCategoryController;
-use App\Http\Controllers\Api\Admin\CourseAssignmentController;
+use App\Http\Controllers\Api\Application\ApplicationController;
+use App\Http\Controllers\Api\Free\FreeController;
 use App\Http\Controllers\Api\User\CourseRegistrationController;
+use App\Http\Controllers\Api\User\EnrollmentController;
 use App\Http\Controllers\Api\User\LMSReportController;
+use App\Http\Controllers\Api\User\StudentResultController;
+use App\Http\Controllers\Api\User\UserController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -79,8 +81,19 @@ Route::prefix('v1')->group(function () {
         Route::get('/getroles', [UserController::class, 'getRoles']);
         Route::get('/getprograms', [UserController::class, 'getPrograms']);
         Route::post('/user-update', [UserController::class, 'updateUser']);
+
+        // RESULT ROUTES
+        Route::middleware('api')->group(function () {
+            Route::prefix('result')->group(function () {
+                Route::get('get-all-user-results', [StudentResultController::class, 'getAllUserResults']);
+                Route::get('get-user-result', [StudentResultController::class, 'getUserResult']);
+            });
+        });
     });
 
+    // Route::middleware('auth:api')->get('/test-auth', function () {
+//     return response()->json(['user' => auth('api')->user()]);
+// });
 
     Route::get('/single-state', [StateController::class, 'single_state']); // Fetch the details of a single state
     Route::get('/all-states', [FreeController::class, 'allState']);
