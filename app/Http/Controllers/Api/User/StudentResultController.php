@@ -317,6 +317,12 @@ class StudentResultController extends Controller
             // First, retrieve the grades from Moodle
             $moodleBaseUrl = "https://moodletest.qverselearning.org";
 
+            $validated = $request->validate([
+                'bonus' => 'nullable|numeric',
+            ]);
+
+            $bonus = $validated['bonus'] ?? 0;
+
             // Get all grades from Moodle for the specific course
             $grades = DB::connection('mysql2')->select("
             SELECT
@@ -367,6 +373,9 @@ class StudentResultController extends Controller
 
             foreach ($groupedGrades as $studentId => $studentGrades) {
                 try {
+
+
+
                     $firstGrade = $studentGrades->first();
                     $user = User::find($studentId);
                     if (!$user) {
@@ -377,9 +386,66 @@ class StudentResultController extends Controller
                         continue;
                     }
 
-                    // Calculate final grade
-                    $totalScore = $studentGrades->sum('finalgrade');
-                    $totalMax = $studentGrades->sum('grademax');
+
+                    // Initialize activity scores
+                    $assignmentScore = 0;
+                    $quizScore = 0;
+                    $examScore = 0;
+                    $assignmentMax = 10;
+                    $quizMax = 20;
+                    $examMax = 70;
+
+                    foreach ($studentGrades as $activity) {
+                        if ($activity->activity_type === 'quiz' && (float) $activity->grademax == 70) {
+                            $examScore = (float) $activity->finalgrade;
+                            $examMax = (float) $activity->grademax;
+                        } elseif ($activity->activity_type === 'assign') {
+                            $assignmentScore = (float) $activity->finalgrade;
+                            $assignmentMax = (float) $activity->grademax;
+                        } elseif ($activity->activity_type === 'quiz') {
+                            $quizScore = (float) $activity->finalgrade;
+                            $quizMax = (float) $activity->grademax;
+                        }
+                    }
+
+                    // Apply bonus points logic
+                    if ($bonus > 0) {
+                        if ($examScore < $examMax) {
+                            // Add bonus to exam if it's less than max
+                            $examScore = min($examScore + $bonus, $examMax);
+                        } else {
+                            // Otherwise distribute bonus to quiz and assignment
+                            $remainingBonus = $bonus;
+
+                            // First add to quiz
+                            $quizNeeded = $quizMax - $quizScore;
+                            $quizAdd = min($remainingBonus, $quizNeeded);
+                            $quizScore += $quizAdd;
+                            $remainingBonus -= $quizAdd;
+
+                            // Then add to assignment if there's remaining bonus
+                            if ($remainingBonus > 0) {
+                                $assignNeeded = $assignmentMax - $assignmentScore;
+                                $assignAdd = min($remainingBonus, $assignNeeded);
+                                $assignmentScore += $assignAdd;
+                            }
+                        }
+                    }
+
+                    // // Calculate final grade
+                    // $totalScore = $studentGrades->sum('finalgrade');
+                    // $totalMax = $studentGrades->sum('grademax');
+                    // $courseGrade = $totalMax > 0 ? round(($totalScore / $totalMax) * 100, 2) : 0;
+
+                    // // Map score to letter grade and quality points
+                    // [$gradeLetter, $qualityPoint] = $this->mapScoreToGrade($courseGrade);
+                    // $creditLoad = $courseMetadata->credit_load ?? 3;
+                    // $qualityPoints = $qualityPoint * $creditLoad;
+
+
+                    // Calculate total scores
+                    $totalScore = $assignmentScore + $quizScore + $examScore;
+                    $totalMax = $assignmentMax + $quizMax + $examMax;
                     $courseGrade = $totalMax > 0 ? round(($totalScore / $totalMax) * 100, 2) : 0;
 
                     // Map score to letter grade and quality points
@@ -391,38 +457,52 @@ class StudentResultController extends Controller
                     $resultData = [
                         'user_id' => $studentId,
                         'course_id' => $courseId,
-                        // 'course_id' => $courseMetadata->course_id,
                         'course_code' => $courseMetadata->course_code,
                         'course_title' => $courseMetadata->course_title,
                         'credit_load' => $creditLoad,
                         'quality_point' => $qualityPoints,
                         'level' => $user->academic_level,
-                        'session' => $user->academic_session, // Assuming user has an academic session field
-                        'semester' => $user->academic_semester, // Assuming user has a semester field
+                        'session' => $user->academic_session,
+                        'semester' => $user->academic_semester,
+                        'assignment' => $assignmentScore,
+                        'quiz' => $quizScore,
+                        'exam' => $examScore,
                         'score' => $courseGrade,
                         'grade' => $gradeLetter,
                         // 'remarks' => 'Automatically imported from Moodle',
                         'status' => 'published',
                         'date_of_result' => now(),
+                        'bonus_points_applied' => $bonus > 0 ? $bonus : null,
                     ];
 
+                    $result = StudentResult::updateOrCreate(
+                        [
+                            'user_id' => $studentId,
+                            'course_id' => $courseId,
+                            'session' => $user->academic_session,
+                            'semester' => $user->academic_semester
+                        ],
+                        $resultData
+                    );
+
+                    $createdResults[] = $result;
 
 
-                    $existingResult = StudentResult::where('user_id', $studentId)
-                        ->where('course_id', $courseMetadata->course_id)
-                        ->where('session', $user->academic_session)
-                        ->where('semester', $user->academic_semester)
-                        ->first();
+                    // $existingResult = StudentResult::where('user_id', $studentId)
+                    //     ->where('course_id', $courseMetadata->course_id)
+                    //     ->where('session', $user->academic_session)
+                    //     ->where('semester', $user->academic_semester)
+                    //     ->first();
 
-                    if ($existingResult) {
-                        // Update existing record
-                        $existingResult->update($resultData);
-                        $createdResults[] = $existingResult;
-                    } else {
-                        // Create new record
-                        $result = StudentResult::create($resultData);
-                        $createdResults[] = $result;
-                    }
+                    // if ($existingResult) {
+                    //     // Update existing record
+                    //     $existingResult->update($resultData);
+                    //     $createdResults[] = $existingResult;
+                    // } else {
+                    //     // Create new record
+                    //     $result = StudentResult::create($resultData);
+                    //     $createdResults[] = $result;
+                    // }
                 } catch (\Throwable $th) {
                     $skippedUsers[] = [
                         'student_id' => $studentId,
