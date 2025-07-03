@@ -1,0 +1,76 @@
+name: Deploy Laravel to Namecheap cPanel
+
+on:
+  push:
+    branches:
+      - main  # Change this to your deploy branch if needed
+
+jobs:
+  deploy:
+    name: Deploy to cPanel via SSH
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy Laravel Project
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CPANEL_HOST }}
+          username: ${{ secrets.CPANEL_USERNAME }}
+          key: ${{ secrets.CPANEL_SSH_KEY }}
+          port: 22
+          script: |
+            echo "📦 Starting deployment on ${{ secrets.CPANEL_HOST }}"
+
+            cd ${{ secrets.CPANEL_DEPLOY_PATH }}
+
+            echo "🧰 Backing up current version..."
+            TIMESTAMP=$(date +%Y%m%d%H%M%S)
+            BACKUP_DIR=../backup_$TIMESTAMP
+            cp -r . $BACKUP_DIR
+
+            set -e
+            trap 'echo "❌ Deployment failed. Rolling back..."; rm -rf ./*; cp -r $BACKUP_DIR/* .; echo "✔️ Rollback complete."; exit 1' ERR
+
+            echo "📥 Pulling latest code..."
+            git pull origin main
+
+            echo "📦 Installing dependencies..."
+            composer install --no-dev --optimize-autoloader
+
+            echo "🔐 Setting permissions..."
+            find storage -type d -exec chmod 775 {} \;
+            find bootstrap/cache -type d -exec chmod 775 {} \;
+
+            echo "⚙️ Running Laravel commands..."
+            php artisan migrate --force
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+
+            echo "✅ Deployment successful!"
+
+  notify:
+    name: Notify on Failure
+    needs: deploy
+    if: failure()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Failure Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASS }}
+          subject: "🚨 Laravel Deployment Failed"
+          to: your@email.com
+          from: GitHub CI
+          body: |
+            ❌ Laravel deployment to cPanel failed.
+
+            🔗 Repo: ${{ github.repository }}
+            🧱 Branch: ${{ github.ref_name }}
+            🔀 Commit: ${{ github.sha }}
+
+            Please check GitHub Actions logs for more details.
