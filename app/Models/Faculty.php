@@ -10,9 +10,11 @@ class Faculty extends Model
 {
     use HasFactory;
     
-    protected $fillable = [
-        'faculty_name', 'status',
-    ];
+    // protected $fillable = [
+    //     'faculty_name', 'status',
+    // ];
+
+    protected $guarded = [];
     
     public function departments(): HasMany
     {
