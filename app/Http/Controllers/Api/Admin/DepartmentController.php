@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Department;
+use App\Models\Faculty;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use App\Models\Faculty;
-use App\Models\Department;
+use Illuminate\Validation\Rule;
 
 class DepartmentController extends Controller
 {
@@ -20,7 +21,9 @@ class DepartmentController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'department_name' => ['required'],
+            'department_code' => ['required', 'unique:departments,department_code'],
             'faculty_id' => ['required', 'exists:faculties,id']
+
         ]);
         if ($validator->fails()) {
             return response()->json(['status' => 422, 'response' => 'Unprocessable Content', 'errors' => $validator->errors()], 422);
@@ -31,6 +34,7 @@ class DepartmentController extends Controller
             $department = new Department();
             $department->faculty_id = $request->input('faculty_id');
             $department->department_name = $request->input('department_name');
+            $department->department_code = $request->input('department_code');
             $department->save();
 
             // Return a success response
@@ -105,9 +109,11 @@ class DepartmentController extends Controller
         }
 
         // Find faculty with only 'id' and 'department_name' fields from departments
-        $selected_faculty = Faculty::with(['departments' => function ($query) {
-            $query->select('id', 'department_name', 'faculty_id');
-        }])->find($request->faculty_id);
+        $selected_faculty = Faculty::with([
+            'departments' => function ($query) {
+                $query->select('id', 'department_name', 'faculty_id');
+            }
+        ])->find($request->faculty_id);
 
         if (!$selected_faculty) {
             return response()->json([
@@ -151,8 +157,22 @@ class DepartmentController extends Controller
 
     public function update_department(Request $request)
     {
+        $department = Department::find($request->department_id);
+        if (!$department) {
+            return response()->json([
+                'status' => 404,
+                'response' => 'Not Found',
+                'message' => 'Department not found!'
+            ], 404);
+        }
+
+
         $validator = Validator::make($request->all(), [
             'department_name' => ['string', 'max:255'],
+            'department_code' => [
+                'string',
+                Rule::unique('departments', 'department_code')->ignore($department->id),
+            ],
             'status' => ['boolean']
         ]);
         if ($validator->fails()) {

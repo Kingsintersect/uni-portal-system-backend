@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Department;
+use App\Models\Faculty;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use App\Models\Faculty;
-use App\Models\Department;
+use Illuminate\Validation\Rule;
 
 class FacultyController extends Controller
 {
@@ -20,6 +21,7 @@ class FacultyController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'faculty_name' => ['required'],
+            'faculty_code' => ['required', 'unique:faculties,faculty_code']
         ]);
         if ($validator->fails()) {
             return response()->json(['status' => 422, 'response' => 'Unprocessable Content', 'errors' => $validator->errors()], 422);
@@ -29,6 +31,7 @@ class FacultyController extends Controller
             // Create a new Faculty record
             $faculty = new Faculty();
             $faculty->faculty_name = $request->input('faculty_name');
+            $faculty->faculty_code = $request->input('faculty_code');
             $faculty->save();
 
             // Return a success response
@@ -147,8 +150,19 @@ class FacultyController extends Controller
 
     public function update_faculty(Request $request)
     {
+        $faculty = Faculty::find($request->faculty_id);
+
+        if (!$faculty) {
+            return response()->json([
+                'status' => 404,
+                'response' => 'Not Found',
+                'message' => 'Faculty not found'
+            ], 404);
+        }
+
         $validator = Validator::make($request->all(), [
             'faculty_name' => ['string', 'max:255'],
+            'faculty_code' => ['string', Rule::unique('faculties', 'faculty_code')->ignore($faculty->id)],
             'status' => ['boolean']
         ]);
         if ($validator->fails()) {
